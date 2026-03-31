@@ -357,9 +357,28 @@ class MarkDecorator:
 
 def get_unpacked_marks(obj: object) -> Iterable[Mark]:
     """Obtain the unpacked marks that are stored on an object."""
-    mark_list = getattr(obj, "pytestmark", [])
-    if not isinstance(mark_list, list):
-        mark_list = [mark_list]
+    if isinstance(obj, type):
+        # Consider the MRO to collect marks from all base classes, not just
+        # the first one in the resolution order (see #10356 / pytest #8763).
+        mark_list = []
+        seen = set()
+        for cls in obj.__mro__:
+            cls_marks = cls.__dict__.get("pytestmark", [])
+            if not isinstance(cls_marks, list):
+                cls_marks = [cls_marks]
+            for mark in cls_marks:
+                # Deduplicate by mark identity (name, args, kwargs) so that
+                # structurally identical marks from different classes in a
+                # diamond hierarchy are collapsed.
+                mark_obj = getattr(mark, "mark", mark)
+                key = (mark_obj.name, mark_obj.args, tuple(sorted(mark_obj.kwargs.items())))
+                if key not in seen:
+                    seen.add(key)
+                    mark_list.append(mark)
+    else:
+        mark_list = getattr(obj, "pytestmark", [])
+        if not isinstance(mark_list, list):
+            mark_list = [mark_list]
     return normalize_mark_list(mark_list)
 
 
@@ -388,7 +407,15 @@ def store_mark(obj, mark: Mark) -> None:
     assert isinstance(mark, Mark), mark
     # Always reassign name to avoid updating pytestmark in a reference that
     # was only borrowed.
-    obj.pytestmark = [*get_unpacked_marks(obj), mark]
+    # For classes, read only the class's own marks from __dict__ to avoid
+    # re-merging inherited marks (get_unpacked_marks handles MRO at read time).
+    if isinstance(obj, type):
+        own_marks = obj.__dict__.get("pytestmark", [])
+        if not isinstance(own_marks, list):
+            own_marks = [own_marks]
+        obj.pytestmark = [*normalize_mark_list(own_marks), mark]
+    else:
+        obj.pytestmark = [*get_unpacked_marks(obj), mark]
 
 
 # Typing for builtin pytest marks. This is cheating; it gives builtin marks
