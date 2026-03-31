@@ -355,7 +355,7 @@ class MarkDecorator:
         return self.with_args(*args, **kwargs)
 
 
-def get_unpacked_marks(obj: object, consider_mro: bool = True) -> Iterable[Mark]:
+def get_unpacked_marks(obj: object, consider_mro: bool = True) -> List[Mark]:
     """Obtain the unpacked marks that are stored on an object.
 
     If *consider_mro* is true (the default) and *obj* is a class, marks from
@@ -389,7 +389,7 @@ def get_unpacked_marks(obj: object, consider_mro: bool = True) -> Iterable[Mark]
         mark_list = getattr(obj, "pytestmark", [])
         if not isinstance(mark_list, list):
             mark_list = [mark_list]
-    return normalize_mark_list(mark_list)
+    return list(normalize_mark_list(mark_list))
 
 
 def normalize_mark_list(
