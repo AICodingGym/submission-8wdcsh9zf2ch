@@ -377,10 +377,18 @@ def get_unpacked_marks(obj: object, consider_mro: bool = True) -> List[Mark]:
                     # structurally identical marks from different classes in a
                     # diamond hierarchy are collapsed.
                     mark_obj = getattr(mark, "mark", mark)
-                    key = (mark_obj.name, mark_obj.args, tuple(sorted(mark_obj.kwargs.items())))
-                    if key not in seen:
-                        seen.add(key)
-                        mark_list.append(mark)
+                    try:
+                        key = (mark_obj.name, mark_obj.args, tuple(sorted(mark_obj.kwargs.items())))
+                        if key not in seen:
+                            seen.add(key)
+                            mark_list.append(mark)
+                    except TypeError:
+                        # args/kwargs contain unhashable types (e.g. lists
+                        # from @pytest.mark.parametrize) — fall back to
+                        # object identity; always include the mark.
+                        if id(mark) not in seen:
+                            seen.add(id(mark))
+                            mark_list.append(mark)
         else:
             mark_list = obj.__dict__.get("pytestmark", [])
             if not isinstance(mark_list, list):

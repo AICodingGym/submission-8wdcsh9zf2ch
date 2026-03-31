@@ -194,6 +194,70 @@ def test_issue5_descriptor_not_triggered():
         return False
 
 
+# ===================== Issue 6: unhashable args in dedup key ============
+
+def test_issue6_unhashable_args():
+    """
+    Marks with unhashable args (e.g. @pytest.mark.parametrize('abc', [1,2,3]))
+    should not cause TypeError during MRO-based dedup.
+    """
+    import pytest
+
+    class Base:
+        pass
+    # parametrize stores a Mark with args=('abc', [1, 2, 3]) — list is unhashable
+    Base.pytestmark = [Mark("parametrize", args=("abc", [1, 2, 3]), kwargs={})]
+
+    class Child(Base):
+        pass
+
+    try:
+        result = list(get_unpacked_marks(Child))
+        assert len(result) == 1
+        assert result[0].name == "parametrize"
+        print("PASS  issue6: unhashable args handled without TypeError")
+        return True
+    except TypeError as e:
+        print(f"FAIL  issue6: TypeError with unhashable args — {e}")
+        return False
+
+
+# ===================== Issue 7: consider_mro parameter ==================
+
+def test_issue7_consider_mro_false():
+    """
+    get_unpacked_marks(obj, consider_mro=False) should only return marks
+    directly on the class, not inherited ones.
+    """
+    import pytest
+
+    xfail = pytest.mark.xfail
+
+    @xfail("a")
+    class A: pass
+
+    @xfail("b")
+    class B: pass
+
+    @xfail("c")
+    class C(A, B): pass
+
+    all_marks = get_unpacked_marks(C)
+    expected_all = [xfail("c").mark, xfail("a").mark, xfail("b").mark]
+    if all_marks != expected_all:
+        print(f"FAIL  issue7: MRO marks mismatch — got {all_marks}, expected {expected_all}")
+        return False
+
+    own_marks = get_unpacked_marks(C, consider_mro=False)
+    expected_own = [xfail("c").mark]
+    if own_marks != expected_own:
+        print(f"FAIL  issue7: consider_mro=False — got {own_marks}, expected {expected_own}")
+        return False
+
+    print("PASS  issue7: consider_mro parameter works correctly")
+    return True
+
+
 # ===================== Main =====================
 
 if __name__ == "__main__":
@@ -207,6 +271,8 @@ if __name__ == "__main__":
         test_issue3_own_marks_not_polluted(),
         test_issue4_id_dedup_structural_duplicates(),
         test_issue5_descriptor_not_triggered(),
+        test_issue6_unhashable_args(),
+        test_issue7_consider_mro_false(),
     ]
 
     print("=" * 60)
