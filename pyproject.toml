@@ -8,6 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = "src/_pytest/_version.py"
+fallback_version = "7.2.0.dev0"
 
 [tool.pytest.ini_options]
 minversion = "2.0"
