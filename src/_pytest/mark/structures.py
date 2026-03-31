@@ -355,26 +355,36 @@ class MarkDecorator:
         return self.with_args(*args, **kwargs)
 
 
-def get_unpacked_marks(obj: object) -> Iterable[Mark]:
-    """Obtain the unpacked marks that are stored on an object."""
+def get_unpacked_marks(obj: object, consider_mro: bool = True) -> Iterable[Mark]:
+    """Obtain the unpacked marks that are stored on an object.
+
+    If *consider_mro* is true (the default) and *obj* is a class, marks from
+    all classes in the MRO are collected and deduplicated.  When set to false,
+    only the marks directly stored on *obj* itself are returned.
+    """
     if isinstance(obj, type):
-        # Consider the MRO to collect marks from all base classes, not just
-        # the first one in the resolution order (see #10356 / pytest #8763).
-        mark_list = []
-        seen = set()
-        for cls in obj.__mro__:
-            cls_marks = cls.__dict__.get("pytestmark", [])
-            if not isinstance(cls_marks, list):
-                cls_marks = [cls_marks]
-            for mark in cls_marks:
-                # Deduplicate by mark identity (name, args, kwargs) so that
-                # structurally identical marks from different classes in a
-                # diamond hierarchy are collapsed.
-                mark_obj = getattr(mark, "mark", mark)
-                key = (mark_obj.name, mark_obj.args, tuple(sorted(mark_obj.kwargs.items())))
-                if key not in seen:
-                    seen.add(key)
-                    mark_list.append(mark)
+        if consider_mro:
+            # Consider the MRO to collect marks from all base classes, not just
+            # the first one in the resolution order (see #10356 / pytest #8763).
+            mark_list = []
+            seen = set()
+            for cls in obj.__mro__:
+                cls_marks = cls.__dict__.get("pytestmark", [])
+                if not isinstance(cls_marks, list):
+                    cls_marks = [cls_marks]
+                for mark in cls_marks:
+                    # Deduplicate by mark identity (name, args, kwargs) so that
+                    # structurally identical marks from different classes in a
+                    # diamond hierarchy are collapsed.
+                    mark_obj = getattr(mark, "mark", mark)
+                    key = (mark_obj.name, mark_obj.args, tuple(sorted(mark_obj.kwargs.items())))
+                    if key not in seen:
+                        seen.add(key)
+                        mark_list.append(mark)
+        else:
+            mark_list = obj.__dict__.get("pytestmark", [])
+            if not isinstance(mark_list, list):
+                mark_list = [mark_list]
     else:
         mark_list = getattr(obj, "pytestmark", [])
         if not isinstance(mark_list, list):
